@@ -33,14 +33,7 @@ jobs:
 
       # Ensure all tests pass and the code coverage is 80%+
       - name: Test with coverage and enforce minimum
-        run: |
-          dotnet test --no-build --configuration Release \
-            --collect:"XPlat Code Coverage" \
-            /p:CollectCoverage=true \
-            /p:CoverletOutputFormat=cobertura \
-            /p:Threshold=80 \
-            /p:ThresholdType=line \
-            /p:ThresholdStat=total
+        run: dotnet test --no-build --configuration Release   --collect:"XPlat Code Coverage"  /p:CollectCoverage=true  /p:CoverletOutputFormat=cobertura  /p:Threshold=80  /p:ThresholdType=line  /p:ThresholdStat=total
 
       # If coverlet package is not installed in the project no output will be generated above and the above will pass
       # code coverage (assuming tests pass). This verifies the coverage file was generated and thus coverlet is installed
