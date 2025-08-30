@@ -31,6 +31,13 @@ jobs:
         # Specify any additional build options
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test
-        # Specify any additional test options
-        run: dotnet test --no-build --configuration Release
+      - name: Test with coverage and enforce minimum
+        run: |
+          dotnet test --no-build --configuration Release \
+            --collect:"XPlat Code Coverage" \
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=cobertura \
+            /p:Threshold=80 \
+            /p:ThresholdType=line \
+            /p:ThresholdStat=total
+      
