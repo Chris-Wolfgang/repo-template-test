@@ -38,9 +38,15 @@ jobs:
       # If coverlet package is not installed in the project no output will be generated above and the above will pass
       # code coverage (assuming tests pass). This verifies the coverage file was generated and thus coverlet is installed
       # and fails if it does not
-      - name: Ensure coverage file was generated
+      - name: Ensure code coverage is reported and >0 lines are valid
         run: |
-          if ! find . -name 'coverage.cobertura.xml' | grep -q coverage.cobertura.xml; then
+          FILE=$(find . -name 'coverage.cobertura.xml' | head -n 1)
+          if [ ! -f "$FILE" ]; then
             echo "❌ No coverage report found! Make sure coverlet.collector is installed and enabled."
+            exit 1
+          fi
+          LINES_VALID=$(xmllint --xpath "string(/coverage/@lines-valid)" "$FILE")
+          if [ "$LINES_VALID" = "0" ]; then
+            echo "❌ No valid lines for code coverage found! Your tests may not be exercising any code or no code is instrumented."
             exit 1
           fi
