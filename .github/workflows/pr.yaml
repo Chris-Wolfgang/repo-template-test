@@ -31,6 +31,7 @@ jobs:
         # Specify any additional build options
         run: dotnet build --no-restore --configuration Release
 
+      # Ensure all tests pass and the code coverage is 80%+
       - name: Test with coverage and enforce minimum
         run: |
           dotnet test --no-build --configuration Release \
@@ -40,4 +41,13 @@ jobs:
             /p:Threshold=80 \
             /p:ThresholdType=line \
             /p:ThresholdStat=total
-      
+
+      # If coverlet package is not installed in the project no output will be generated above and the above will pass
+      # code coverage (assuming tests pass). This verifies the coverage file was generated and thus coverlet is installed
+      # and fails if it does not
+      - name: Ensure coverage file was generated
+        run: |
+          if ! find . -name 'coverage.cobertura.xml' | grep -q coverage.cobertura.xml; then
+            echo "❌ No coverage report found! Make sure coverlet.collector is installed and enabled."
+            exit 1
+          fi
