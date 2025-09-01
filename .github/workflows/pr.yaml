@@ -24,17 +24,24 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
-      - name: Install JetBrains dotCover Global Tool
-        run: dotnet tool install --global JetBrains.dotCover.GlobalTool
+      - name: Download JetBrains dotCover CLI
+        run: |
+          DOTCOVER_VERSION="2025.2.0.1"
+          wget -O dotcover.tar.gz "https://download.jetbrains.com/resharper/dotUltimate.${DOTCOVER_VERSION}/JetBrains.dotCover.CommandLineTools.${DOTCOVER_VERSION}.tar.gz"
+          mkdir -p dotcover
+          tar -xzf dotcover.tar.gz -C dotcover
 
       - name: Run tests with JetBrains dotCover (cover)
         run: |
-          export PATH="$PATH:/home/runner/.dotnet/tools"
-          dotnet dotcover cover \
+          chmod +x dotcover/dotCover.sh
+          ./dotcover/dotCover.sh cover \
             --ReportType=DetailedXML \
             --Output=dotCoverReport.xml \
             -- \
             dotnet test --no-build --configuration Release
+
+      - name: Install xmllint
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
       - name: Check code coverage is at least 80%
         run: |
