@@ -33,13 +33,11 @@ jobs:
 
       - name: Run tests with JetBrains dotCover (cover)
         run: |
-          cd dotcover/JetBrains.dotCover.CommandLineTools.2025.2.0.1
-          dotnet JetBrains.dotCover.Console.Runner.dll cover \
+          dotnet cover/JetBrains.dotCover.Console.Runner.dll cover \
             --ReportType=DetailedXML \
             --Output=../../dotCoverReport.xml \
             -- \
             dotnet test --no-build --configuration Release
-          cd ../../
 
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
