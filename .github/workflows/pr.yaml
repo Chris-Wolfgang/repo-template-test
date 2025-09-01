@@ -50,6 +50,11 @@ jobs:
             --Output=dotCoverReport.xml \
             --WorkingDir=$(pwd)
 
+      - name: Debug - Output dotCover report
+        run: |
+          echo "=== dotCoverReport.xml ==="
+          cat dotCoverReport.xml || echo "dotCoverReport.xml not found"
+
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
