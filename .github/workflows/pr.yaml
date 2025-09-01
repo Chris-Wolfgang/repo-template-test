@@ -1,17 +1,12 @@
-# This workflow runs all branches when a pull request is created. 
-# If security settings have been properly configured, any branch that fails this workflow will be blocked from being merged into main and possibly other common branches link develop depending your specific settings
-
 name: PR Checks
 
 on:
   pull_request:
     branches:
-      # List any other branches here that you want this workflow to run on
       - main
 
 jobs:
   build-and-test:
-    # Specifies the OS to run this workflow on. You can specify more than one. For a complete and current list, review the [documentation] (https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job)
     runs-on: ubuntu-latest
 
     steps:
@@ -21,45 +16,43 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          # Specifies the version of dotnet to use. You can specify multiple versions. For a complate list of supported versions review the [documentation](https://github.com/actions/setup-dotnet#inputs)
           dotnet-version: '8.0.x'
 
       - name: Restore dependencies
         run: dotnet restore
 
       - name: Build
-        # Specify any additional build options
         run: dotnet build --no-restore --configuration Release
 
-      # This is required to parse the XML files below
-      - name: Install xmllint
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+      - name: Install JetBrains dotCover Global Tool
+        run: dotnet tool install --global JetBrains.dotCover.GlobalTool
 
-      # Ensure all tests pass and the code coverage is 80%+
-      - name: Test with coverage and enforce minimum
-      # This ensures Coverlet MSBuild integration is used, so the threshold is enforced.
-      - name: Test with coverage and enforce minimum
+      - name: Run tests with JetBrains dotCover (cover)
         run: |
-          dotnet test --no-build --configuration Release \
-            /p:CollectCoverage=true \
-            /p:CoverletOutputFormat=cobertura \
-            /p:Threshold=80 \
-            /p:ThresholdType=line \
-            /p:ThresholdStat=total
+          export PATH="$PATH:/home/runner/.dotnet/tools"
+          dotnet dotcover cover \
+            --ReportType=DetailedXML \
+            --Output=dotCoverReport.xml \
+            -- \
+            dotnet test --no-build --configuration Release
 
-            
-      # If coverlet package is not installed in the project no output will be generated above and the above will pass
-      # code coverage (assuming tests pass). This verifies the coverage file was generated and thus coverlet is installed
-      # and fails if it does not
-      - name: Ensure code coverage is reported and >0 lines are valid
+      - name: Check code coverage is at least 80%
         run: |
-          FILE=$(find . -name 'coverage.cobertura.xml' | head -n 1)
-          if [ ! -f "$FILE" ]; then
-            echo "❌ No coverage report found! Make sure coverlet.collector is installed and enabled."
+          COVERAGE=$(xmllint --xpath 'string(/Root/Summary/@CoveragePercent)' dotCoverReport.xml | cut -d'.' -f1)
+          echo "Coverage: $COVERAGE%"
+          if [ -z "$COVERAGE" ]; then
+            echo "❌ Could not determine coverage percentage!"
             exit 1
           fi
-          LINES_VALID=$(xmllint --xpath "string(/coverage/@lines-valid)" "$FILE")
-          if [ "$LINES_VALID" = "0" ]; then
-            echo "❌ No valid lines for code coverage found! Your tests may not be exercising any code or no code is instrumented."
+          if [ "$COVERAGE" -lt 80 ]; then
+            echo "❌ Code coverage is below 80% ($COVERAGE%)"
             exit 1
+          else
+            echo "✅ Code coverage is at least 80% ($COVERAGE%)"
           fi
+
+      - name: Upload JetBrains dotCover XML report
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotCoverReport.xml
+          path: dotCoverReport.xml
