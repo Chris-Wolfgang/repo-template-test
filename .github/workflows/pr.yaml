@@ -31,52 +31,91 @@ jobs:
           mkdir -p dotcover
           tar -xzf dotcover.tar.gz -C dotcover
 
-      - name: List dotcover file structure
+      - name: Find all test projects
+        id: detect
+        shell: bash
         run: |
-          ls -R dotcover
-
-      - name: Debug - List files in current directory
-        run: |
-          pwd
-          ls -l
-          ls -l *.sln || echo "No solution file found in this directory"
-
-      - name: Run tests with JetBrains dotCover (cover)
-        run: |
-          dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
-            --TargetExecutable=/usr/bin/dotnet \
-            --TargetArguments="test RepositoryTemplateTest.sln --configuration Release" \
-            --ReportType=DetailedXML \
-            --Output=dotCoverReport.xml \
-            --WorkingDir=$(pwd) \
-            --Filters="+:RepositoryTemplateTest*"
-
-      - name: Debug - Output dotCover report
-        run: |
-          echo "=== dotCoverReport.xml ==="
-          cat dotCoverReport.xml || echo "dotCoverReport.xml not found"
+          TEST_PROJECTS=$(find . -type f -name "*.csproj" | grep -Ei '/test[^/]*/|Test' | sort)
+          if [ -z "$TEST_PROJECTS" ]; then
+            echo "❌ No test projects found!"
+            exit 1
+          fi
+          echo "$TEST_PROJECTS" > test_projects.lst
+          echo "test_projects_list=$(paste -sd\  test_projects.lst)" >> $GITHUB_OUTPUT
 
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
-      - name: Check code coverage is at least 80%
+      - name: Run all test projects with dotCover and check global coverage
+        shell: bash
         run: |
-          COVERAGE=$(xmllint --xpath 'string(/Root/@CoveragePercent)' dotCoverReport.xml | cut -d'.' -f1)
-          echo "Coverage: $COVERAGE%"
-          if [ -z "$COVERAGE" ]; then
-            echo "❌ Could not determine coverage percentage!"
+          set -e
+          COVERED_TOTAL=0
+          TOTAL_STATEMENTS=0
+          OVERALL_PASS=1
+          idx=0
+
+          while read PROJ; do
+            idx=$((idx+1))
+            PROJ_NAME=$(basename "$PROJ" .csproj)
+            REPORT="dotCoverReport_${PROJ_NAME}.xml"
+            echo "Running coverage for $PROJ_NAME ($PROJ)..."
+
+            dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
+              --TargetExecutable=/usr/bin/dotnet \
+              --TargetArguments="test $PROJ --no-build --configuration Release" \
+              --ReportType=DetailedXML \
+              --Output=$REPORT \
+              --WorkingDir=$(pwd) \
+              --Filters="+:${PROJ_NAME}*"
+
+            # Parse coverage numbers
+            COV=$(xmllint --xpath 'string(/Root/@CoveredStatements)' $REPORT)
+            TOT=$(xmllint --xpath 'string(/Root/@TotalStatements)' $REPORT)
+            PCT=$(xmllint --xpath 'string(/Root/@CoveragePercent)' $REPORT | cut -d'.' -f1)
+
+            echo "  Covered: $COV / Total: $TOT ($PCT%)"
+
+            if [ -z "$COV" ] || [ -z "$TOT" ]; then
+              echo "❌ Could not parse coverage for $PROJ_NAME"
+              OVERALL_PASS=0
+            fi
+
+            # Enforce per-project threshold
+            if [ "$PCT" -lt 80 ]; then
+              echo "❌ Code coverage for $PROJ_NAME is below 80% ($PCT%)"
+              OVERALL_PASS=0
+            else
+              echo "✅ Code coverage for $PROJ_NAME is at least 80% ($PCT%)"
+            fi
+
+            COVERED_TOTAL=$((COVERED_TOTAL+COV))
+            TOTAL_STATEMENTS=$((TOTAL_STATEMENTS+TOT))
+          done < test_projects.lst
+
+          if [ "$TOTAL_STATEMENTS" -eq 0 ]; then
+            echo "❌ No statements found in any project."
             exit 1
-          fi
-          if [ "$COVERAGE" -lt 80 ]; then
-            echo "❌ Code coverage is below 80% ($COVERAGE%)"
-            exit 1
-          else
-            echo "✅ Code coverage is at least 80% ($COVERAGE%)"
           fi
 
-      - name: Upload JetBrains dotCover XML report
+          GLOBAL_PCT=$((COVERED_TOTAL*100/TOTAL_STATEMENTS))
+          echo "Total covered: $COVERED_TOTAL / $TOTAL_STATEMENTS ($GLOBAL_PCT%)"
+
+          if [ "$GLOBAL_PCT" -lt 80 ]; then
+            echo "❌ Combined code coverage is below 80% ($GLOBAL_PCT%)"
+            exit 1
+          fi
+
+          if [ "$OVERALL_PASS" -eq 0 ]; then
+            echo "❌ One or more test projects failed the 80% threshold."
+            exit 1
+          fi
+
+          echo "✅ All test projects and global sum meet or exceed 80% coverage."
+
+      - name: Upload all dotCover XML reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dotCoverReport.xml
-          path: dotCoverReport.xml
+          name: dotCoverReports
+          path: dotCoverReport_*.xml
