@@ -38,7 +38,7 @@ jobs:
       - name: Run tests with JetBrains dotCover (cover)
         run: |
           dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
-            --TargetExecutable=dotnet \
+            --TargetExecutable=/usr/bin/dotnet \
             --TargetArguments="test --no-build --configuration Release" \
             --ReportType=DetailedXML \
             --Output=dotCoverReport.xml
@@ -66,4 +66,3 @@ jobs:
         with:
           name: dotCoverReport.xml
           path: dotCoverReport.xml
-          
