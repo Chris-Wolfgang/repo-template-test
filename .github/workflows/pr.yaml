@@ -45,7 +45,7 @@ jobs:
         run: |
           dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
             --TargetExecutable=/usr/bin/dotnet \
-            --TargetArguments="test --no-build --configuration Release" \
+            --TargetArguments="test RepositoryTemplateTest.sln --configuration Release" \
             --ReportType=DetailedXML \
             --Output=dotCoverReport.xml
 
