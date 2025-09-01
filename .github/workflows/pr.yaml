@@ -60,7 +60,7 @@ jobs:
 
       - name: Check code coverage is at least 80%
         run: |
-          COVERAGE=$(xmllint --xpath 'string(/Root/Summary/@CoveragePercent)' dotCoverReport.xml | cut -d'.' -f1)
+          COVERAGE=$(xmllint --xpath 'string(/Root/@CoveragePercent)' dotCoverReport.xml | cut -d'.' -f1)
           echo "Coverage: $COVERAGE%"
           if [ -z "$COVERAGE" ]; then
             echo "❌ Could not determine coverage percentage!"
