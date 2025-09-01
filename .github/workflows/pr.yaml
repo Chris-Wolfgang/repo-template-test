@@ -33,8 +33,8 @@ jobs:
 
       - name: Run tests with JetBrains dotCover (cover)
         run: |
-          chmod +x dotcover/dotCover.sh
-          ./dotcover/dotCover.sh cover \
+          chmod +x dotcover/dotCover
+          ./dotcover/dotCover cover \
             --ReportType=DetailedXML \
             --Output=dotCoverReport.xml \
             -- \
