@@ -35,6 +35,12 @@ jobs:
         run: |
           ls -R dotcover
 
+      - name: Debug - List files in current directory
+        run: |
+          pwd
+          ls -l
+          ls -l *.sln || echo "No solution file found in this directory"
+
       - name: Run tests with JetBrains dotCover (cover)
         run: |
           dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
