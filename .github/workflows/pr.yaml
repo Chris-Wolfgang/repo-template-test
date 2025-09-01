@@ -31,13 +31,19 @@ jobs:
           mkdir -p dotcover
           tar -xzf dotcover.tar.gz -C dotcover
 
+      - name: List dotcover file structure
+        run: |
+          ls -R dotcover
+
       - name: Run tests with JetBrains dotCover (cover)
         run: |
-          dotnet cover/JetBrains.dotCover.Console.Runner.dll cover \
+          cd dotcover/JetBrains.dotCover.CommandLineTools.2025.2.0.1
+          dotnet JetBrains.dotCover.Console.Runner.dll cover \
             --ReportType=DetailedXML \
-            --Output=../../dotCoverReport.xml \
+            --Output=../../../dotCoverReport.xml \
             -- \
             dotnet test --no-build --configuration Release
+          cd ../../../
 
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
