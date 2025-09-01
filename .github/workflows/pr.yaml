@@ -47,7 +47,8 @@ jobs:
             --TargetExecutable=/usr/bin/dotnet \
             --TargetArguments="test RepositoryTemplateTest.sln --configuration Release" \
             --ReportType=DetailedXML \
-            --Output=dotCoverReport.xml
+            --Output=dotCoverReport.xml \
+            --WorkingDir=$(pwd)
 
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
