@@ -48,7 +48,8 @@ jobs:
             --TargetArguments="test RepositoryTemplateTest.sln --configuration Release" \
             --ReportType=DetailedXML \
             --Output=dotCoverReport.xml \
-            --WorkingDir=$(pwd)
+            --WorkingDir=$(pwd) \
+            --Filters="+:RepositoryTemplateTest*"
 
       - name: Debug - Output dotCover report
         run: |
@@ -74,6 +75,7 @@ jobs:
           fi
 
       - name: Upload JetBrains dotCover XML report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dotCoverReport.xml
