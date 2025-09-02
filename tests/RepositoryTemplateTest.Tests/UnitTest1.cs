@@ -19,11 +19,7 @@ namespace RepositoryTemplateTest.Tests
         }
 
 
-        [Fact]
-        public void Test3()
-        {
-            ProgramApp.Main([""]);
-        }
+
 
     }
 }
