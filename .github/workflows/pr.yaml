@@ -21,98 +21,52 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build
+      - name: Build Solution
         run: dotnet build --no-restore --configuration Release
 
-      - name: Download JetBrains dotCover CLI
-        shell: pwsh
-        run: |
-          $DOTCOVER_VERSION = "2025.2.0.1"
-          $url = "https://download.jetbrains.com/resharper/dotUltimate.$DOTCOVER_VERSION/JetBrains.dotCover.CommandLineTools.$DOTCOVER_VERSION.zip"
-          Invoke-WebRequest $url -OutFile dotcover.zip
-          Expand-Archive dotcover.zip -DestinationPath dotcover
+      - name: Test Solution and Collect Coverage (XPlat Code Coverage)
+        run: dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
 
-      - name: Find solution and all src projects, and build dotCover filters
-        id: detect
-        shell: pwsh
-        run: |
-          # Find solution file
-          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
-          if (-not $sln) {
-            Write-Error "❌ No solution file (*.sln) found in the repository root or subdirectories!"
-            exit 1
-          }
-          Write-Host "=== Found solution: $($sln.FullName)"
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "solution_path=$($sln.FullName)"
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
 
-          Write-Host "=== Listing all production projects under /src ==="
-          Get-ChildItem -Recurse -Filter *.csproj -Path .\src | % { $_.FullName } | Sort-Object | Set-Content src_projects.lst
-          Get-Content src_projects.lst
-          if (!(Get-Content src_projects.lst)) {
-            Write-Error "❌ No production projects found in /src!"
+      - name: Generate Coverage Reports (HTML, TextSummary, GitHub Markdown)
+        run: |
+          reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:"CoverageReport" -reporttypes:Html;TextSummary;MarkdownSummaryGithub
+
+      - name: Check Coverage Thresholds
+        run: |
+          if (-not (Test-Path "CoverageReport/Summary.txt")) {
+            Write-Error "CoverageReport/Summary.txt not found! Coverage report was not generated."
             exit 1
           }
 
-          # Build dotCover filters for all src projects
-          $filters = (Get-Content src_projects.lst | ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_) } | ForEach-Object { "+:$($_)*;" }) -join ""
-          $filters = $filters.TrimEnd(";")
-          Write-Host "Filters string: $filters"
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "filters=$filters"
-          $src_names = (Get-Content src_projects.lst | ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_) }) -join " "
-          Add-Content -Path $env:GITHUB_OUTPUT -Value "src_names=$src_names"
+          $summary = Get-Content "CoverageReport/Summary.txt"
 
-      - name: Run solution tests with dotCover
-        shell: pwsh
-        run: |
-          $filters = "${{ steps.detect.outputs.filters }}"
-          $sln = "${{ steps.detect.outputs.solution_path }}"
-          $dotcoverExe = Join-Path dotcover 'JetBrains.dotCover.Console.Runner.exe'
-          $report = "dotCoverReport.xml"
-          Write-Host "=== Running dotCover for solution: $sln ==="
-          & $dotcoverExe cover `
-            --TargetExecutable="dotnet.exe" `
-            --TargetArguments="test `"$sln`" --no-build --configuration Release" `
-            --ReportType=DetailedXML `
-            --Output=$report `
-            --WorkingDir="${PWD}" `
-            --Filters="$filters"
-          Write-Host "=== First 40 lines of $report ==="
-          Get-Content $report -TotalCount 40
+          $projectLines = $summary | Where-Object { $_ -match '^\s*\|' }
+          $failedProjects = @()
 
-      - name: Check code coverage for each production project (fail if any <80%)
-        shell: pwsh
-        run: |
-          $src_names = "${{ steps.detect.outputs.src_names }}"
-          $report = "dotCoverReport.xml"
-          $fail = 0
-
-          Write-Host "=== Per-project coverage check ==="
-          foreach ($name in $src_names.Split(" ")) {
-            $pct = Select-String -Path $report -Pattern "<Assembly name=`"$name`" CoveragePercent=`"\d+" | ForEach-Object {
-              if ($_ -match 'CoveragePercent="(\d+)"') { $matches[1] }
-            }
-            Write-Host "  Project: $name  Coverage: $($pct ?? 'N/A')%"
-            if (-not $pct) {
-              Write-Host "❌ Could not find coverage for $name in $report"
-              $fail = 1
-            } elseif ([int]$pct -lt 80) {
-              Write-Host "❌ Coverage for $name is below 80% ($pct%)"
-              $fail = 1
-            } else {
-              Write-Host "✅ Coverage for $name is at least 80% ($pct%)"
+          foreach ($line in $projectLines) {
+            # Example line: | MyProject | 90.0% | ... |
+            if ($line -match '^\s*\|\s*([^\|]+)\s*\|\s*([\d\.]+)%') {
+              $projectName = $matches[1].Trim()
+              $lineCoverage = [double]$matches[2]
+              if ($lineCoverage -lt 80.0) {
+                $failedProjects += "$projectName ($lineCoverage%)"
+              }
             }
           }
-          if ($fail -ne 0) {
-            Write-Error "❌ One or more production projects are below 80% code coverage."
+
+          if ($failedProjects.Count -gt 0) {
+            Write-Error "The following projects are below 80% line coverage: $($failedProjects -join ', ')"
             exit 1
           }
-          Write-Host "✅ All production projects in /src are at least 80% covered."
 
-      - name: Upload dotCover XML report and logs
+      - name: Upload coverage results and reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dotCoverReportAndLogs
+          name: coverage-results-and-report
           path: |
-            dotCoverReport.xml
-            src_projects.lst
+            TestResults/
+            CoverageReport/
