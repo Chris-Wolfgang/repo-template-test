@@ -31,20 +31,17 @@ jobs:
           mkdir -p dotcover
           tar -xzf dotcover.tar.gz -C dotcover
 
-      - name: Find all test projects
+      - name: Find all test projects (under /tests)
         id: detect
         shell: bash
         run: |
-          echo "=== Listing all csproj files ==="
+          echo "=== Listing all csproj files in the repo ==="
           find . -type f -name "*.csproj"
-          echo "=== Listing all folders ==="
-          find . -type d
-          # Find all .csproj files likely to be test projects
-          find . -type f -name "*.csproj" | grep -Ei '/test[^/]*/|Test' | sort > test_projects.lst
-          echo "=== Contents of test_projects.lst ==="
+          echo "=== Listing all test projects under /tests ==="
+          find ./tests -type f -name "*.csproj" | sort > test_projects.lst
           cat test_projects.lst
           if [ ! -s test_projects.lst ]; then
-            echo "❌ No test projects found!"
+            echo "❌ No test projects found in /tests!"
             exit 1
           fi
 
@@ -71,9 +68,12 @@ jobs:
           while read PROJ; do
             idx=$((idx+1))
             PROJ_NAME=$(basename "$PROJ" .csproj)
-            REPORT="dotCoverReport_${PROJ_NAME}.xml"
-            MAIN_PROJ=$(basename "$PROJ" .Tests)
+
+            # Guess the main product assembly from the test project name, e.g., Foo.Tests -> Foo
+            MAIN_PROJ=$(echo "$PROJ_NAME" | sed 's/\.[Tt]ests$//')
             MAIN_DLL_FILTER="+:${MAIN_PROJ}*"
+            REPORT="dotCoverReport_${PROJ_NAME}.xml"
+
             echo "---------------------------------------------------"
             echo "[$idx] Running coverage for $PROJ_NAME"
             echo "  Project path: $PROJ"
@@ -86,7 +86,7 @@ jobs:
             echo "  Running dotCover..."
             dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
               --TargetExecutable=/usr/bin/dotnet \
-              --TargetArguments="test $PROJ --no-build --configuration Release --logger trx;LogFileName=TestResults.trx" \
+              --TargetArguments="test $PROJ --no-build --configuration Release --logger trx;LogFileName=TestResults_${PROJ_NAME}.trx" \
               --ReportType=DetailedXML \
               --Output=$REPORT \
               --WorkingDir=$(pwd) \
@@ -94,7 +94,6 @@ jobs:
             echo "  dotCover run complete. Checking for report file..."
             ls -al $REPORT || echo "  $REPORT not found!"
 
-            # Output first 20 lines of the report for debugging
             echo "=== First 20 lines of $REPORT ==="
             head -20 $REPORT || echo "$REPORT not found or empty."
 
@@ -149,5 +148,5 @@ jobs:
           name: dotCoverReportsAndLogs
           path: |
             dotCoverReport_*.xml
-            TestResults.trx
+            TestResults_*.trx
             test_projects.lst
