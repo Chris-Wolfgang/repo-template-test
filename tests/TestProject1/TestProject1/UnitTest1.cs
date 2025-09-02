@@ -7,7 +7,7 @@ namespace TestProject1
         [Fact]
         public void Test3()
         {
-            //ProgramApp.Main([""]);
+            ProgramApp.Main([""]);
         }
     }
 }
