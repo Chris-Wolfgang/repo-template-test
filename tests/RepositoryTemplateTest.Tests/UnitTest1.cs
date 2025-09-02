@@ -8,5 +8,12 @@ namespace RepositoryTemplateTest.Tests
             //Assert.True(true);
             //Assert.Fail();
         }
+
+
+        [Fact]
+        public void Test2()
+        {
+            Program.Main([]);
+        }
     }
 }

@@ -1,10 +1,17 @@
 namespace RepositoryTemplateTest;
 
-internal class Program
+public class Program
 {
-	static void Main(string[] args)
+    public static void Main(string[] args)
     {
-        Console.WriteLine("Hello, World!");
+        if (args.Length == 0)
+        {
+            Console.WriteLine("Hello, World!");
+        }
+        else
+        {
+            Console.WriteLine($"Arguments: {string.Join(", ", args)}");
+        }
     }
 }
 
