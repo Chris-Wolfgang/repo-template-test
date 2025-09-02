@@ -35,8 +35,14 @@ jobs:
         id: detect
         shell: bash
         run: |
+          echo "=== Listing all csproj files ==="
+          find . -type f -name "*.csproj"
+          echo "=== Listing all folders ==="
+          find . -type d
           # Find all .csproj files likely to be test projects
           find . -type f -name "*.csproj" | grep -Ei '/test[^/]*/|Test' | sort > test_projects.lst
+          echo "=== Contents of test_projects.lst ==="
+          cat test_projects.lst
           if [ ! -s test_projects.lst ]; then
             echo "❌ No test projects found!"
             exit 1
@@ -54,27 +60,48 @@ jobs:
           OVERALL_PASS=1
           idx=0
 
+          echo "=== Current directory listing ==="
+          pwd
+          ls -al
+          echo "=== Environment variables ==="
+          env
+          echo "=== dotnet info ==="
+          dotnet --info
+
           while read PROJ; do
             idx=$((idx+1))
             PROJ_NAME=$(basename "$PROJ" .csproj)
             REPORT="dotCoverReport_${PROJ_NAME}.xml"
-            # Try to infer the main/product assembly for filter (assume src/ProjectName/ProjectName.csproj exists)
             MAIN_PROJ=$(basename "$PROJ" .Tests)
             MAIN_DLL_FILTER="+:${MAIN_PROJ}*"
-            echo "Running coverage for $PROJ_NAME ($PROJ) using filter $MAIN_DLL_FILTER..."
-
+            echo "---------------------------------------------------"
+            echo "[$idx] Running coverage for $PROJ_NAME"
+            echo "  Project path: $PROJ"
+            echo "  Assuming main product: $MAIN_PROJ"
+            echo "  Using filter: $MAIN_DLL_FILTER"
+            echo "  Building test project before running tests..."
+            dotnet build "$PROJ" --configuration Release || { echo "Build failed for $PROJ"; exit 1; }
+            echo "  Running dotnet test dry run..."
+            dotnet test "$PROJ" --no-build --configuration Release --list-tests
+            echo "  Running dotCover..."
             dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
               --TargetExecutable=/usr/bin/dotnet \
-              --TargetArguments="test $PROJ --no-build --configuration Release" \
+              --TargetArguments="test $PROJ --no-build --configuration Release --logger trx;LogFileName=TestResults.trx" \
               --ReportType=DetailedXML \
               --Output=$REPORT \
               --WorkingDir=$(pwd) \
               --Filters="$MAIN_DLL_FILTER"
+            echo "  dotCover run complete. Checking for report file..."
+            ls -al $REPORT || echo "  $REPORT not found!"
+
+            # Output first 20 lines of the report for debugging
+            echo "=== First 20 lines of $REPORT ==="
+            head -20 $REPORT || echo "$REPORT not found or empty."
 
             # Parse coverage numbers
-            COV=$(xmllint --xpath 'string(/Root/@CoveredStatements)' $REPORT)
-            TOT=$(xmllint --xpath 'string(/Root/@TotalStatements)' $REPORT)
-            PCT=$(xmllint --xpath 'string(/Root/@CoveragePercent)' $REPORT | cut -d'.' -f1)
+            COV=$(xmllint --xpath 'string(/Root/@CoveredStatements)' $REPORT 2>/dev/null || echo "")
+            TOT=$(xmllint --xpath 'string(/Root/@TotalStatements)' $REPORT 2>/dev/null || echo "")
+            PCT=$(xmllint --xpath 'string(/Root/@CoveragePercent)' $REPORT 2>/dev/null | cut -d'.' -f1 || echo "")
 
             echo "  Covered: $COV / Total: $TOT ($PCT%)"
 
@@ -115,9 +142,12 @@ jobs:
 
           echo "✅ All test projects and global sum meet or exceed 80% coverage."
 
-      - name: Upload all dotCover XML reports
+      - name: Upload all dotCover XML reports and test logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dotCoverReports
-          path: dotCoverReport_*.xml
+          name: dotCoverReportsAndLogs
+          path: |
+            dotCoverReport_*.xml
+            TestResults.trx
+            test_projects.lst
