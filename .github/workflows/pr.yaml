@@ -31,12 +31,10 @@ jobs:
           mkdir -p dotcover
           tar -xzf dotcover.tar.gz -C dotcover
 
-      - name: Find all test projects (under /tests)
+      - name: Find all test projects (under /tests) and all src projects
         id: detect
         shell: bash
         run: |
-          echo "=== Listing all csproj files in the repo ==="
-          find . -type f -name "*.csproj"
           echo "=== Listing all test projects under /tests ==="
           find ./tests -type f -name "*.csproj" | sort > test_projects.lst
           cat test_projects.lst
@@ -44,6 +42,19 @@ jobs:
             echo "❌ No test projects found in /tests!"
             exit 1
           fi
+
+          echo "=== Listing all production projects under /src ==="
+          find ./src -type f -name "*.csproj" | sort > src_projects.lst
+          cat src_projects.lst
+          if [ ! -s src_projects.lst ]; then
+            echo "❌ No production projects found in /src!"
+            exit 1
+          fi
+
+          # Build dotCover filters for all src projects
+          FILTERS=$(cat src_projects.lst | xargs -n1 basename | sed 's/.csproj$//' | awk '{printf "+:%s*;", $1}' | sed 's/;$//')
+          echo "Filters string: $FILTERS"
+          echo "filters=$FILTERS" >> $GITHUB_OUTPUT
 
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
@@ -57,28 +68,19 @@ jobs:
           OVERALL_PASS=1
           idx=0
 
-          echo "=== Current directory listing ==="
-          pwd
-          ls -al
-          echo "=== Environment variables ==="
-          env
-          echo "=== dotnet info ==="
-          dotnet --info
+          FILTERS="${{ steps.detect.outputs.filters }}"
+
+          echo "=== dotCover filters in use: $FILTERS ==="
 
           while read PROJ; do
             idx=$((idx+1))
             PROJ_NAME=$(basename "$PROJ" .csproj)
-
-            # Guess the main product assembly from the test project name, e.g., Foo.Tests -> Foo
-            MAIN_PROJ=$(echo "$PROJ_NAME" | sed 's/\.[Tt]ests$//')
-            MAIN_DLL_FILTER="+:${MAIN_PROJ}*"
             REPORT="dotCoverReport_${PROJ_NAME}.xml"
 
             echo "---------------------------------------------------"
             echo "[$idx] Running coverage for $PROJ_NAME"
             echo "  Project path: $PROJ"
-            echo "  Assuming main product: $MAIN_PROJ"
-            echo "  Using filter: $MAIN_DLL_FILTER"
+            echo "  Using filters: $FILTERS"
             echo "  Building test project before running tests..."
             dotnet build "$PROJ" --configuration Release || { echo "Build failed for $PROJ"; exit 1; }
             echo "  Running dotnet test dry run..."
@@ -90,7 +92,7 @@ jobs:
               --ReportType=DetailedXML \
               --Output=$REPORT \
               --WorkingDir=$(pwd) \
-              --Filters="$MAIN_DLL_FILTER"
+              --Filters="$FILTERS"
             echo "  dotCover run complete. Checking for report file..."
             ls -al $REPORT || echo "  $REPORT not found!"
 
@@ -150,3 +152,4 @@ jobs:
             dotCoverReport_*.xml
             TestResults_*.trx
             test_projects.lst
+            src_projects.lst
