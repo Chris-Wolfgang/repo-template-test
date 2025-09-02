@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
@@ -25,97 +25,94 @@ jobs:
         run: dotnet build --no-restore --configuration Release
 
       - name: Download JetBrains dotCover CLI
+        shell: pwsh
         run: |
-          DOTCOVER_VERSION="2025.2.0.1"
-          wget -O dotcover.tar.gz "https://download.jetbrains.com/resharper/dotUltimate.${DOTCOVER_VERSION}/JetBrains.dotCover.CommandLineTools.${DOTCOVER_VERSION}.tar.gz"
-          mkdir -p dotcover
-          tar -xzf dotcover.tar.gz -C dotcover
+          $DOTCOVER_VERSION = "2025.2.0.1"
+          $url = "https://download.jetbrains.com/resharper/dotUltimate.$DOTCOVER_VERSION/JetBrains.dotCover.CommandLineTools.$DOTCOVER_VERSION.zip"
+          Invoke-WebRequest $url -OutFile dotcover.zip
+          Expand-Archive dotcover.zip -DestinationPath dotcover
 
-      - name: Find all test projects (under /tests) and all src projects, and build dotCover filters
+      - name: Find solution and all src projects, and build dotCover filters
         id: detect
-        shell: bash
+        shell: pwsh
         run: |
-          echo "=== Listing all test projects under /tests ==="
-          find ./tests -type f -name "*.csproj" | sort > test_projects.lst
-          cat test_projects.lst
-          if [ ! -s test_projects.lst ]; then
-            echo "❌ No test projects found in /tests!"
+          # Find solution file
+          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
+          if (-not $sln) {
+            Write-Error "❌ No solution file (*.sln) found in the repository root or subdirectories!"
             exit 1
-          fi
+          }
+          Write-Host "=== Found solution: $($sln.FullName)"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "solution_path=$($sln.FullName)"
 
-          echo "=== Listing all production projects under /src ==="
-          find ./src -type f -name "*.csproj" | sort > src_projects.lst
-          cat src_projects.lst
-          if [ ! -s src_projects.lst ]; then
-            echo "❌ No production projects found in /src!"
+          Write-Host "=== Listing all production projects under /src ==="
+          Get-ChildItem -Recurse -Filter *.csproj -Path .\src | % { $_.FullName } | Sort-Object | Set-Content src_projects.lst
+          Get-Content src_projects.lst
+          if (!(Get-Content src_projects.lst)) {
+            Write-Error "❌ No production projects found in /src!"
             exit 1
-          fi
+          }
 
           # Build dotCover filters for all src projects
-          FILTERS=$(cat src_projects.lst | xargs -n1 basename | sed 's/.csproj$//' | awk '{printf "+:%s*;", $1}' | sed 's/;$//')
-          echo "Filters string: $FILTERS"
-          echo "filters=$FILTERS" >> $GITHUB_OUTPUT
+          $filters = (Get-Content src_projects.lst | ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_) } | ForEach-Object { "+:$($_)*;" }) -join ""
+          $filters = $filters.TrimEnd(";")
+          Write-Host "Filters string: $filters"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "filters=$filters"
+          $src_names = (Get-Content src_projects.lst | ForEach-Object { [System.IO.Path]::GetFileNameWithoutExtension($_) }) -join " "
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "src_names=$src_names"
 
-          # Space-separated list of src project names (assemblies)
-          SRC_NAMES=$(cat src_projects.lst | xargs -n1 basename | sed 's/.csproj$//' | xargs)
-          echo "src_names=$SRC_NAMES" >> $GITHUB_OUTPUT
-
-      - name: Install xmllint
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
-
-      - name: Run each test project with dotCover and check coverage per /src project
-        shell: bash
+      - name: Run solution tests with dotCover
+        shell: pwsh
         run: |
-          set -e
-          FILTERS="${{ steps.detect.outputs.filters }}"
-          SRC_NAMES="${{ steps.detect.outputs.src_names }}"
-          FAIL=0
-          idx=0
+          $filters = "${{ steps.detect.outputs.filters }}"
+          $sln = "${{ steps.detect.outputs.solution_path }}"
+          $dotcoverExe = Join-Path dotcover 'JetBrains.dotCover.Console.Runner.exe'
+          $report = "dotCoverReport.xml"
+          Write-Host "=== Running dotCover for solution: $sln ==="
+          & $dotcoverExe cover `
+            --TargetExecutable="dotnet.exe" `
+            --TargetArguments="test `"$sln`" --no-build --configuration Release" `
+            --ReportType=DetailedXML `
+            --Output=$report `
+            --WorkingDir="${PWD}" `
+            --Filters="$filters"
+          Write-Host "=== First 40 lines of $report ==="
+          Get-Content $report -TotalCount 40
 
-          while read PROJ; do
-            idx=$((idx+1))
-            PROJ_NAME=$(basename "$PROJ" .csproj)
-            REPORT="dotCoverReport_${PROJ_NAME}.xml"
-            echo "=== Running coverage for test project: $PROJ_NAME ==="
-            dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
-              --TargetExecutable=/usr/bin/dotnet \
-              --TargetArguments="test $PROJ --no-build --configuration Release" \
-              --ReportType=DetailedXML \
-              --Output=$REPORT \
-              --WorkingDir=$(pwd) \
-              --Filters="$FILTERS"
-            echo "=== First 40 lines of $REPORT ==="
-            head -40 "$REPORT" || true
+      - name: Check code coverage for each production project (fail if any <80%)
+        shell: pwsh
+        run: |
+          $src_names = "${{ steps.detect.outputs.src_names }}"
+          $report = "dotCoverReport.xml"
+          $fail = 0
 
-            for NAME in $SRC_NAMES; do
-              PCT=$(xmllint --xpath "string(//Assembly[@name='$NAME']/@CoveragePercent)" "$REPORT" | cut -d'.' -f1)
-              echo "  Project: $NAME (from $PROJ_NAME) Coverage: ${PCT:-N/A}%"
-              if [ -z "$PCT" ]; then
-                echo "❌ Could not find coverage for $NAME in $REPORT"
-                FAIL=1
-              elif [ "$PCT" -lt 80 ]; then
-                echo "❌ Coverage for $NAME is below 80% ($PCT%)"
-                FAIL=1
-              else
-                echo "✅ Coverage for $NAME is at least 80% ($PCT%)"
-              fi
-            done
-          done < test_projects.lst
-
-          if [ "$FAIL" -ne 0 ]; then
-            echo "❌ One or more production projects are below 80% code coverage."
+          Write-Host "=== Per-project coverage check ==="
+          foreach ($name in $src_names.Split(" ")) {
+            $pct = Select-String -Path $report -Pattern "<Assembly name=`"$name`" CoveragePercent=`"\d+" | ForEach-Object {
+              if ($_ -match 'CoveragePercent="(\d+)"') { $matches[1] }
+            }
+            Write-Host "  Project: $name  Coverage: $($pct ?? 'N/A')%"
+            if (-not $pct) {
+              Write-Host "❌ Could not find coverage for $name in $report"
+              $fail = 1
+            } elseif ([int]$pct -lt 80) {
+              Write-Host "❌ Coverage for $name is below 80% ($pct%)"
+              $fail = 1
+            } else {
+              Write-Host "✅ Coverage for $name is at least 80% ($pct%)"
+            }
+          }
+          if ($fail -ne 0) {
+            Write-Error "❌ One or more production projects are below 80% code coverage."
             exit 1
-          fi
+          }
+          Write-Host "✅ All production projects in /src are at least 80% covered."
 
-          echo "✅ All production projects in /src are at least 80% covered in every test run."
-
-      - name: Upload all dotCover XML reports and test logs
+      - name: Upload dotCover XML report and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dotCoverReportsAndLogs
+          name: dotCoverReportAndLogs
           path: |
-            dotCoverReport_*.xml
-            TestResults_*.trx
-            test_projects.lst
+            dotCoverReport.xml
             src_projects.lst
