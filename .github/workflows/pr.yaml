@@ -35,13 +35,12 @@ jobs:
         id: detect
         shell: bash
         run: |
-          TEST_PROJECTS=$(find . -type f -name "*.csproj" | grep -Ei '/test[^/]*/|Test' | sort)
-          if [ -z "$TEST_PROJECTS" ]; then
+          # Find all .csproj files likely to be test projects
+          find . -type f -name "*.csproj" | grep -Ei '/test[^/]*/|Test' | sort > test_projects.lst
+          if [ ! -s test_projects.lst ]; then
             echo "❌ No test projects found!"
             exit 1
           fi
-          echo "$TEST_PROJECTS" > test_projects.lst
-          echo "test_projects_list=$(paste -sd\  test_projects.lst)" >> $GITHUB_OUTPUT
 
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
@@ -59,7 +58,10 @@ jobs:
             idx=$((idx+1))
             PROJ_NAME=$(basename "$PROJ" .csproj)
             REPORT="dotCoverReport_${PROJ_NAME}.xml"
-            echo "Running coverage for $PROJ_NAME ($PROJ)..."
+            # Try to infer the main/product assembly for filter (assume src/ProjectName/ProjectName.csproj exists)
+            MAIN_PROJ=$(basename "$PROJ" .Tests)
+            MAIN_DLL_FILTER="+:${MAIN_PROJ}*"
+            echo "Running coverage for $PROJ_NAME ($PROJ) using filter $MAIN_DLL_FILTER..."
 
             dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
               --TargetExecutable=/usr/bin/dotnet \
@@ -67,7 +69,7 @@ jobs:
               --ReportType=DetailedXML \
               --Output=$REPORT \
               --WorkingDir=$(pwd) \
-              --Filters="+:${PROJ_NAME}*"
+              --Filters="$MAIN_DLL_FILTER"
 
             # Parse coverage numbers
             COV=$(xmllint --xpath 'string(/Root/@CoveredStatements)' $REPORT)
