@@ -1,6 +1,4 @@
-using Microsoft.VisualStudio.TestPlatform.TestHost;
-
-namespace RepositoryTemplateTest.Tests
+namespace RepositoryTemplateTest.App.Tests
 {
     public class UnitTest1
     {
@@ -19,7 +17,11 @@ namespace RepositoryTemplateTest.Tests
         }
 
 
-
+        [Fact]
+        public void Test3()
+        {
+            ProgramApp.Main([""]);
+        }
 
     }
 }
