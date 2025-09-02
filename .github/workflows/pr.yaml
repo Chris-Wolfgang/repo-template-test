@@ -31,7 +31,7 @@ jobs:
           mkdir -p dotcover
           tar -xzf dotcover.tar.gz -C dotcover
 
-      - name: Find all test projects (under /tests) and all src projects
+      - name: Find all test projects (under /tests) and all src projects, and build dotCover filters
         id: detect
         shell: bash
         run: |
@@ -56,100 +56,68 @@ jobs:
           echo "Filters string: $FILTERS"
           echo "filters=$FILTERS" >> $GITHUB_OUTPUT
 
+          # Space-separated list of test projects
+          TEST_LIST=$(cat test_projects.lst | xargs)
+          echo "test_projects_list=$TEST_LIST" >> $GITHUB_OUTPUT
+
+          # Space-separated list of src project names (assemblies)
+          SRC_NAMES=$(cat src_projects.lst | xargs -n1 basename | sed 's/.csproj$//' | xargs)
+          echo "src_names=$SRC_NAMES" >> $GITHUB_OUTPUT
+
       - name: Install xmllint
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
-      - name: Run all test projects with dotCover and check global coverage
+      - name: Run all test projects with dotCover (single session)
         shell: bash
         run: |
           set -e
-          COVERED_TOTAL=0
-          TOTAL_STATEMENTS=0
-          OVERALL_PASS=1
-          idx=0
-
           FILTERS="${{ steps.detect.outputs.filters }}"
+          TEST_PROJECTS="${{ steps.detect.outputs.test_projects_list }}"
+          echo "=== dotCover filters in use: $FILTERS"
+          echo "=== Running tests for all projects: $TEST_PROJECTS"
+          dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
+            --TargetExecutable=/usr/bin/dotnet \
+            --TargetArguments="test $TEST_PROJECTS --no-build --configuration Release" \
+            --ReportType=DetailedXML \
+            --Output=dotCoverReport.xml \
+            --WorkingDir=$(pwd) \
+            --Filters="$FILTERS"
+          echo "=== First 40 lines of dotCoverReport.xml ==="
+          head -40 dotCoverReport.xml
 
-          echo "=== dotCover filters in use: $FILTERS ==="
+      - name: Check code coverage for each production project (fail if any <80%)
+        shell: bash
+        run: |
+          SRC_NAMES="${{ steps.detect.outputs.src_names }}"
+          REPORT=dotCoverReport.xml
 
-          while read PROJ; do
-            idx=$((idx+1))
-            PROJ_NAME=$(basename "$PROJ" .csproj)
-            REPORT="dotCoverReport_${PROJ_NAME}.xml"
-
-            echo "---------------------------------------------------"
-            echo "[$idx] Running coverage for $PROJ_NAME"
-            echo "  Project path: $PROJ"
-            echo "  Using filters: $FILTERS"
-            echo "  Building test project before running tests..."
-            dotnet build "$PROJ" --configuration Release || { echo "Build failed for $PROJ"; exit 1; }
-            echo "  Running dotnet test dry run..."
-            dotnet test "$PROJ" --no-build --configuration Release --list-tests
-            echo "  Running dotCover..."
-            dotnet dotcover/JetBrains.dotCover.Console.Runner.dll cover \
-              --TargetExecutable=/usr/bin/dotnet \
-              --TargetArguments="test $PROJ --no-build --configuration Release --logger trx;LogFileName=TestResults_${PROJ_NAME}.trx" \
-              --ReportType=DetailedXML \
-              --Output=$REPORT \
-              --WorkingDir=$(pwd) \
-              --Filters="$FILTERS"
-            echo "  dotCover run complete. Checking for report file..."
-            ls -al $REPORT || echo "  $REPORT not found!"
-
-            echo "=== First 20 lines of $REPORT ==="
-            head -20 $REPORT || echo "$REPORT not found or empty."
-
-            # Parse coverage numbers
-            COV=$(xmllint --xpath 'string(/Root/@CoveredStatements)' $REPORT 2>/dev/null || echo "")
-            TOT=$(xmllint --xpath 'string(/Root/@TotalStatements)' $REPORT 2>/dev/null || echo "")
-            PCT=$(xmllint --xpath 'string(/Root/@CoveragePercent)' $REPORT 2>/dev/null | cut -d'.' -f1 || echo "")
-
-            echo "  Covered: $COV / Total: $TOT ($PCT%)"
-
-            if [ -z "$COV" ] || [ -z "$TOT" ]; then
-              echo "❌ Could not parse coverage for $PROJ_NAME"
-              OVERALL_PASS=0
-            fi
-
-            # Enforce per-project threshold
-            if [ "$PCT" -lt 80 ]; then
-              echo "❌ Code coverage for $PROJ_NAME is below 80% ($PCT%)"
-              OVERALL_PASS=0
+          FAIL=0
+          echo "=== Per-project coverage check ==="
+          for NAME in $SRC_NAMES; do
+            # Find the Assembly node for this project and extract the CoveragePercent attribute
+            PCT=$(xmllint --xpath "string(//Assembly[@name='$NAME']/@CoveragePercent)" "$REPORT" | cut -d'.' -f1)
+            echo "  Project: $NAME  Coverage: ${PCT:-N/A}%"
+            if [ -z "$PCT" ]; then
+              echo "❌ Could not find coverage for $NAME in report"
+              FAIL=1
+            elif [ "$PCT" -lt 80 ]; then
+              echo "❌ Coverage for $NAME is below 80% ($PCT%)"
+              FAIL=1
             else
-              echo "✅ Code coverage for $PROJ_NAME is at least 80% ($PCT%)"
+              echo "✅ Coverage for $NAME is at least 80% ($PCT%)"
             fi
+          done
 
-            COVERED_TOTAL=$((COVERED_TOTAL+COV))
-            TOTAL_STATEMENTS=$((TOTAL_STATEMENTS+TOT))
-          done < test_projects.lst
-
-          if [ "$TOTAL_STATEMENTS" -eq 0 ]; then
-            echo "❌ No statements found in any project."
+          if [ "$FAIL" -ne 0 ]; then
+            echo "❌ One or more production projects are below 80% code coverage."
             exit 1
           fi
 
-          GLOBAL_PCT=$((COVERED_TOTAL*100/TOTAL_STATEMENTS))
-          echo "Total covered: $COVERED_TOTAL / $TOTAL_STATEMENTS ($GLOBAL_PCT%)"
+          echo "✅ All production projects in /src are at least 80% covered."
 
-          if [ "$GLOBAL_PCT" -lt 80 ]; then
-            echo "❌ Combined code coverage is below 80% ($GLOBAL_PCT%)"
-            exit 1
-          fi
-
-          if [ "$OVERALL_PASS" -eq 0 ]; then
-            echo "❌ One or more test projects failed the 80% threshold."
-            exit 1
-          fi
-
-          echo "✅ All test projects and global sum meet or exceed 80% coverage."
-
-      - name: Upload all dotCover XML reports and test logs
+      - name: Upload dotCover XML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: dotCoverReportsAndLogs
-          path: |
-            dotCoverReport_*.xml
-            TestResults_*.trx
-            test_projects.lst
-            src_projects.lst
+          name: dotCoverReport.xml
+          path: dotCoverReport.xml
