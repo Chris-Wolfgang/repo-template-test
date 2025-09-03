@@ -60,13 +60,17 @@ jobs:
             echo "Checking module: '$module', percent: '$percent'"
             if [[ "$percent" =~ ^[0-9]+$ ]]; then
               if [ "$percent" -lt 80 ]; then
+                echo "FAIL: $module is below 80% ($percent%)"
                 failed_projects="$failed_projects $module ($percent%)"
+              else
+                echo "PASS: $module meets coverage ($percent%)"
               fi
             else
-              echo "Warning: extracted percent value '$percent' is not a number!"
+              echo "WARNING: extracted percent value '$percent' is not a number!"
             fi
           done
 
+          echo "Failed projects string: '$failed_projects'"
           if [ -n "$failed_projects" ]; then
             echo "The following projects are below 80% line coverage:$failed_projects"
             exit 1
