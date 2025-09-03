@@ -40,15 +40,16 @@ jobs:
 
       - name: Check Coverage Thresholds
         run: |
-          if [ ! -f CoverageReport/Summary.txt ]; then
-            echo "CoverageReport/Summary.txt not found! Coverage report was not generated."
+          if [ ! -f CoverageReport/SummaryGithub.md ]; then
+            echo "CoverageReport/SummaryGithub.md not found! Coverage report was not generated."
             exit 1
           fi
 
           failed_projects=""
-          while IFS= read -r line; do
-            # Match lines that look like: | MyProject | 90.0% | ... |
-            if [[ "$line" =~ ^[[:space:]]*\|[[:space:]]*([^|]+)[[:space:]]*\|[[:space:]]*([0-9\.]+)% ]]; then
+          # Skip header lines and only parse table rows
+          grep -E '^\| [^|]+ \| [0-9\.]+%' CoverageReport/SummaryGithub.md | while read -r line; do
+            # Example line: | RepositoryTemplateTest.Lib | 50% |
+            if [[ "$line" =~ ^\|[[:space:]]*([^|]+)[[:space:]]*\|[[:space:]]*([0-9\.]+)% ]]; then
               project_name="${BASH_REMATCH[1]}"
               line_coverage="${BASH_REMATCH[2]}"
               coverage_float=$(printf "%.2f" "$line_coverage")
@@ -57,7 +58,7 @@ jobs:
                 failed_projects="$failed_projects $project_name ($line_coverage%)"
               fi
             fi
-          done < CoverageReport/Summary.txt
+          done
 
           if [ -n "$failed_projects" ]; then
             echo "The following projects are below 80% line coverage:$failed_projects"
