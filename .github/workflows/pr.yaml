@@ -34,35 +34,29 @@ jobs:
       - name: Install ReportGenerator
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
 
-      - name: Generate Coverage Reports (HTML, TextSummary, GitHub Markdown)
+      - name: Generate Coverage Reports (HTML, TextSummary, GitHub Markdown, CSV)
         run: |
-          reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;MarkdownSummaryGithub"
+          reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;MarkdownSummaryGithub;CsvSummary"
 
       - name: Check Coverage Thresholds
         run: |
-          if [ ! -f CoverageReport/SummaryGithub.md ]; then
-            echo "CoverageReport/SummaryGithub.md not found! Coverage report was not generated."
+          if [ ! -f CoverageReport/Summary.csv ]; then
+            echo "CoverageReport/Summary.csv not found! Coverage report was not generated."
             exit 1
           fi
 
-          # Robustly parse the markdown table for per-project line coverage
           failed_projects=""
-          awk -F'|' '
-            /^\|/ && $3 ~ /%/ {
-              gsub(/^[ \t]+|[ \t]+$/, "", $2);
-              gsub(/^[ \t]+|[ \t]+$/, "", $3);
-              project=$2;
-              coverage=$3;
-              sub(/%/, "", coverage);
-              if (coverage+0 < 80) failed_projects=failed_projects " " project " (" coverage "%)"
-            }
-            END {
-              if (failed_projects != "") {
-                print "The following projects are below 80% line coverage:" failed_projects;
-                exit 1
-              }
-            }
-          ' CoverageReport/SummaryGithub.md
+          tail -n +2 CoverageReport/Summary.csv | while IFS=',' read -r module line_coverage branch_coverage; do
+            percent=$(echo "$line_coverage" | sed 's/%//g' | xargs)
+            if [[ -n "$percent" ]] && (( percent < 80 )); then
+              failed_projects="$failed_projects $module ($percent%)"
+            fi
+          done
+
+          if [ -n "$failed_projects" ]; then
+            echo "The following projects are below 80% line coverage:$failed_projects"
+            exit 1
+          fi
 
       - name: Upload coverage results and reports
         if: always()
