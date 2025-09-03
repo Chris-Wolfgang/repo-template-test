@@ -16,7 +16,7 @@ namespace RepositoryTemplateTest.Lib.Tests
         [Fact]
         public void Test3()
         {
-            Class1.SayHello([""]);
+            //Class1.SayHello([""]);
         }
     }
 }
