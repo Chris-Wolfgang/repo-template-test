@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
@@ -36,31 +36,30 @@ jobs:
 
       - name: Check Coverage Thresholds
         run: |
-          if (-not (Test-Path "CoverageReport/Summary.txt")) {
-            Write-Error "CoverageReport/Summary.txt not found! Coverage report was not generated."
+          if [ ! -f CoverageReport/Summary.txt ]; then
+            echo "CoverageReport/Summary.txt not found! Coverage report was not generated."
             exit 1
-          }
+          fi
 
-          $summary = Get-Content "CoverageReport/Summary.txt"
+          failed_projects=""
+          while IFS= read -r line; do
+            # Match lines that look like: | MyProject | 90.0% | ... |
+            if [[ "$line" =~ ^[[:space:]]*\|[[:space:]]*([^|]+)[[:space:]]*\|[[:space:]]*([0-9\.]+)% ]]; then
+              project_name="${BASH_REMATCH[1]}"
+              line_coverage="${BASH_REMATCH[2]}"
+              # Convert to float and compare
+              coverage_float=$(printf "%.2f" "$line_coverage")
+              above=$(echo "$coverage_float >= 80.0" | bc)
+              if [ "$above" -eq 0 ]; then
+                failed_projects="$failed_projects $project_name ($line_coverage%)"
+              fi
+            fi
+          done < CoverageReport/Summary.txt
 
-          $projectLines = $summary | Where-Object { $_ -match '^\s*\|' }
-          $failedProjects = @()
-
-          foreach ($line in $projectLines) {
-            # Example line: | MyProject | 90.0% | ... |
-            if ($line -match '^\s*\|\s*([^\|]+)\s*\|\s*([\d\.]+)%') {
-              $projectName = $matches[1].Trim()
-              $lineCoverage = [double]$matches[2]
-              if ($lineCoverage -lt 80.0) {
-                $failedProjects += "$projectName ($lineCoverage%)"
-              }
-            }
-          }
-
-          if ($failedProjects.Count -gt 0) {
-            Write-Error "The following projects are below 80% line coverage: $($failedProjects -join ', ')"
+          if [ -n "$failed_projects" ]; then
+            echo "The following projects are below 80% line coverage:$failed_projects"
             exit 1
-          }
+          fi
 
       - name: Upload coverage results and reports
         if: always()
