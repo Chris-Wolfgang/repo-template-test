@@ -54,7 +54,7 @@ jobs:
           fi
 
           failed_projects=""
-          grep -E '^[^ ].*[0-9]+%$' CoverageReport/Summary.txt | grep -v '^Summary' | while read -r line; do
+          while read -r line; do
             module=$(echo "$line" | awk '{print $1}')
             percent=$(echo "$line" | awk '{print $NF}' | tr -d '%' | xargs)
             echo "Checking module: '$module', percent: '$percent'"
@@ -68,7 +68,7 @@ jobs:
             else
               echo "WARNING: extracted percent value '$percent' is not a number!"
             fi
-          done
+          done < <(grep -E '^[^ ].*[0-9]+%$' CoverageReport/Summary.txt | grep -v '^Summary')
 
           echo "Failed projects string: '$failed_projects'"
           if [ -n "$failed_projects" ]; then
