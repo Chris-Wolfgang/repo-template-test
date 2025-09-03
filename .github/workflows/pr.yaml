@@ -36,7 +36,7 @@ jobs:
 
       - name: Generate Coverage Reports (HTML, TextSummary, GitHub Markdown)
         run: |
-          reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:"CoverageReport" -reporttypes:Html;TextSummary;MarkdownSummaryGithub
+          reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;MarkdownSummaryGithub"
 
       - name: Check Coverage Thresholds
         run: |
