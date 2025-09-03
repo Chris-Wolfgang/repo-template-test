@@ -24,8 +24,11 @@ jobs:
       - name: Build Solution
         run: dotnet build --no-restore --configuration Release
 
-      - name: Test Solution and Collect Coverage (XPlat Code Coverage)
-        run: dotnet test --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+      - name: Run Tests and Collect Coverage for Each Test Project
+        run: |
+          find ./tests -type f -name '*.csproj' | while read proj; do
+            dotnet test "$proj" --no-build --collect:"XPlat Code Coverage" --results-directory "./TestResults"
+          done
 
       - name: Install ReportGenerator
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
@@ -47,7 +50,6 @@ jobs:
             if [[ "$line" =~ ^[[:space:]]*\|[[:space:]]*([^|]+)[[:space:]]*\|[[:space:]]*([0-9\.]+)% ]]; then
               project_name="${BASH_REMATCH[1]}"
               line_coverage="${BASH_REMATCH[2]}"
-              # Convert to float and compare
               coverage_float=$(printf "%.2f" "$line_coverage")
               above=$(echo "$coverage_float >= 80.0" | bc)
               if [ "$above" -eq 0 ]; then
