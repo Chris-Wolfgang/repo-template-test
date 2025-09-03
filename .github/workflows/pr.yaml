@@ -38,7 +38,7 @@ jobs:
         run: |
           reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;MarkdownSummaryGithub;CsvSummary"
 
-      - name: Debug: Output module lines from coverage summary
+      - name: Debug Output module lines from coverage summary
         run: |
           echo "Module-level coverage lines in CoverageReport/Summary.txt:"
           grep -E '^[^ ].*[0-9]+%$' CoverageReport/Summary.txt | grep -v '^Summary'
