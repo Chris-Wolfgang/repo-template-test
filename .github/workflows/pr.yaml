@@ -40,14 +40,15 @@ jobs:
 
       - name: Check Coverage Thresholds
         run: |
-          if [ ! -f CoverageReport/Summary.csv ]; then
-            echo "CoverageReport/Summary.csv not found! Coverage report was not generated."
+          if [ ! -f CoverageReport/Summary.txt ]; then
+            echo "CoverageReport/Summary.txt not found! Coverage report was not generated."
             exit 1
           fi
 
           failed_projects=""
-          tail -n +2 CoverageReport/Summary.csv | while IFS=',' read -r module line_coverage branch_coverage; do
-            percent=$(echo "$line_coverage" | sed 's/%//g' | xargs)
+          # Only process lines that don't start with 'Summary' or two spaces and end with % (project lines)
+          grep -E '^[^ ].+[0-9]+%$' CoverageReport/Summary.txt | grep -v '^Summary' | while read -r module coverage; do
+            percent=$(echo "$coverage" | sed 's/%//g' | xargs)
             if [[ -n "$percent" ]] && (( percent < 80 )); then
               failed_projects="$failed_projects $module ($percent%)"
             fi
