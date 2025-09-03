@@ -38,10 +38,13 @@ jobs:
         run: |
           reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;MarkdownSummaryGithub;CsvSummary"
 
-      - name: "Debug - Output module lines from coverage summary"
+      - name: "Debug - Print extracted percent values from coverage summary"
         run: |
-          echo "Module-level coverage lines in CoverageReport/Summary.txt:"
-          grep -E '^[^ ].*[0-9]+%$' CoverageReport/Summary.txt | grep -v '^Summary'
+          echo "Extracted percent values from CoverageReport/Summary.txt:"
+          grep -E '^[^ ].*[0-9]+%$' CoverageReport/Summary.txt | grep -v '^Summary' | while read -r line; do
+            percent=$(echo "$line" | awk '{print $NF}' | tr -d '%' | xargs)
+            echo "'$percent'"
+          done
 
       - name: Check Coverage Thresholds
         run: |
@@ -53,7 +56,6 @@ jobs:
           failed_projects=""
           # Exclude lines that start with a space or "Summary", only include module lines ending with %
           grep -E '^[^ ].*[0-9]+%$' CoverageReport/Summary.txt | grep -v '^Summary' | while read -r line; do
-            # Extract module name (first field) and percent (last field, removing % and trimming whitespace)
             module=$(echo "$line" | awk '{print $1}')
             percent=$(echo "$line" | awk '{print $NF}' | tr -d '%' | xargs)
             if [[ "$percent" =~ ^[0-9]+$ ]] && (( percent < 80 )); then
