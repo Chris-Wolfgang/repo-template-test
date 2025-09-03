@@ -45,25 +45,24 @@ jobs:
             exit 1
           fi
 
+          # Robustly parse the markdown table for per-project line coverage
           failed_projects=""
-          # Skip header lines and only parse table rows
-          grep -E '^\| [^|]+ \| [0-9\.]+%' CoverageReport/SummaryGithub.md | while read -r line; do
-            # Example line: | RepositoryTemplateTest.Lib | 50% |
-            if [[ "$line" =~ ^\|[[:space:]]*([^|]+)[[:space:]]*\|[[:space:]]*([0-9\.]+)% ]]; then
-              project_name="${BASH_REMATCH[1]}"
-              line_coverage="${BASH_REMATCH[2]}"
-              coverage_float=$(printf "%.2f" "$line_coverage")
-              above=$(echo "$coverage_float >= 80.0" | bc)
-              if [ "$above" -eq 0 ]; then
-                failed_projects="$failed_projects $project_name ($line_coverage%)"
-              fi
-            fi
-          done
-
-          if [ -n "$failed_projects" ]; then
-            echo "The following projects are below 80% line coverage:$failed_projects"
-            exit 1
-          fi
+          awk -F'|' '
+            /^\|/ && $3 ~ /%/ {
+              gsub(/^[ \t]+|[ \t]+$/, "", $2);
+              gsub(/^[ \t]+|[ \t]+$/, "", $3);
+              project=$2;
+              coverage=$3;
+              sub(/%/, "", coverage);
+              if (coverage+0 < 80) failed_projects=failed_projects " " project " (" coverage "%)"
+            }
+            END {
+              if (failed_projects != "") {
+                print "The following projects are below 80% line coverage:" failed_projects;
+                exit 1
+              }
+            }
+          ' CoverageReport/SummaryGithub.md
 
       - name: Upload coverage results and reports
         if: always()
