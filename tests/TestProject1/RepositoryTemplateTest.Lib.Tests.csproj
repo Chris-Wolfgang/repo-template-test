@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\RepositoryTemplateTest.Lib\RepositoryTemplateTest.Lib.csproj" />
+    <ProjectReference Include="..\..\src\RepositoryTemplateTest.Lib\RepositoryTemplateTest.Lib.csproj" />
   </ItemGroup>
 
   <ItemGroup>
