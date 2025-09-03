@@ -21,13 +21,14 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build Solution
+      - name: Build Solution (Release)
         run: dotnet build --no-restore --configuration Release
 
-      - name: Run Tests and Collect Coverage for Each Test Project
+      - name: Run Tests and Collect Coverage for Each Test Project (Release)
         run: |
-          find ./tests -type f -name '*.csproj' | while read proj; do
-            dotnet test "$proj" --no-build --collect:"XPlat Code Coverage" --results-directory "./TestResults"
+          find ./tests -type f -name '*Test*.csproj' | while read proj; do
+            echo "Testing $proj"
+            dotnet test "$proj" --no-build --configuration Release --collect:"XPlat Code Coverage" --results-directory "./TestResults"
           done
 
       - name: Install ReportGenerator
