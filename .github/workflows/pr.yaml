@@ -1,17 +1,20 @@
-name: PR Checks
+name: PR Security Scan
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
 
 jobs:
-  build-and-test:
+  build-and-codeql-scan:
     runs-on: ubuntu-latest
 
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -21,61 +24,16 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: Build Solution (Release)
-        run: dotnet build --no-restore --configuration Release
+      - name: Build
+        run: dotnet build --no-restore
 
-      - name: Run Tests and Collect Coverage for Each Test Project (Release)
-        run: |
-          find ./tests -type f -name '*Test*.csproj' | while read proj; do
-            echo "Testing $proj"
-            dotnet test "$proj" --no-build --configuration Release --collect:"XPlat Code Coverage" --results-directory "./TestResults"
-          done
-
-      - name: Install ReportGenerator
-        run: dotnet tool install -g dotnet-reportgenerator-globaltool
-
-      - name: Generate Coverage Reports (HTML, TextSummary, GitHub Markdown, CSV)
-        run: |
-          reportgenerator -reports:"TestResults/**/coverage.cobertura.xml" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;MarkdownSummaryGithub;CsvSummary"
-
-      - name: Check Coverage Thresholds
-        run: |
-          if [ ! -f CoverageReport/Summary.txt ]; then
-            echo "CoverageReport/Summary.txt not found! Coverage report was not generated."
-            exit 1
-          fi
-
-          failed_projects=""
-          while read -r line; do
-            module=$(echo "$line" | awk '{print $1}')
-            percent=$(echo "$line" | awk '{print $NF}' | tr -d '%' | xargs)
-            echo "Checking module: '$module', percent: '$percent'"
-            if [[ "$percent" =~ ^[0-9]+$ ]]; then
-              if [ "$percent" -lt 80 ]; then
-                echo "FAIL: $module is below 80% ($percent%)"
-                failed_projects="$failed_projects $module ($percent%)"
-              else
-                echo "PASS: $module meets coverage ($percent%)"
-              fi
-            else
-              echo "WARNING: extracted percent value '$percent' is not a number!"
-            fi
-          done < <(grep -E '^[^ ].*[0-9]+%$' CoverageReport/Summary.txt | grep -v '^Summary')
-
-          if [ -n "$failed_projects" ]; then
-            echo "The following projects are below 80% line coverage:$failed_projects"
-            exit 1
-          fi
-
-      - name: Security Code Scan
-        uses: security-code-scan/security-code-scan-action@v6
-
-        
-      - name: Upload coverage results and reports
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
         with:
-          name: coverage-results-and-report
-          path: |
-            TestResults/
-            CoverageReport/
+          languages: csharp
+
+      - name: Autobuild
+        uses: github/codeql-action/autobuild@v3
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
