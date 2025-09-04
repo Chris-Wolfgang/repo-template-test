@@ -10,6 +10,7 @@ public class ProgramApp
         }
         else
         {
+            var sqlCommandText = $" SELECT * FROM {args[0]} WHERE ColumnA = '{args[1]}'";
             Console.WriteLine($"Arguments provided: {string.Join(", ", args)}");
         }
     }
