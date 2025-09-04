@@ -37,3 +37,20 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+
+      - name: Fail if CodeQL found alerts
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const repo = process.env.GITHUB_REPOSITORY;
+            const [owner, repoName] = repo.split("/");
+            const result = await github.rest.codeScanning.listAlertsForRepo({
+              owner,
+              repo: repoName,
+              state: "open"
+            });
+            if (result.data.length > 0) {
+              core.setFailed(`CodeQL found ${result.data.length} security alert(s)!`);
+            } else {
+              console.log("No CodeQL alerts found.");
+            }
