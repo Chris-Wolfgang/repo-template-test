@@ -14,9 +14,7 @@ public class ProgramApp
             Console.WriteLine($"Arguments provided: {string.Join(", ", args)}");
         }
 
-        var username = "admin";
-        string sql = "SELECT * FROM Users WHERE Username = '" + username + "'";
-        string password = "SuperSecret123!";
-        var md5 = System.Security.Cryptography.MD5.Create();
+        var insecure = new InsecureQuery();
+        insecure.GetUser("admin' --");
     }
 }
