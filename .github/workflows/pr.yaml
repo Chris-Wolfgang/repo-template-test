@@ -67,6 +67,10 @@ jobs:
             exit 1
           fi
 
+      - name: Security Code Scan
+        uses: security-code-scan/security-code-scan-action@v6
+
+        
       - name: Upload coverage results and reports
         if: always()
         uses: actions/upload-artifact@v4
