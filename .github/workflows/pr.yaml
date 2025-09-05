@@ -1,56 +1,27 @@
-name: PR Security Scan
+name: DevSkim PR Scan
 
 on:
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
+      - master
 
 jobs:
-  build-and-codeql-scan:
+  devskim_scan:
     runs-on: ubuntu-latest
 
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
-
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '8.x'
 
-      - name: Restore dependencies
-        run: dotnet restore
+      - name: Install DevSkim CLI
+        run: dotnet tool install --global Microsoft.DevSkim.CLI
 
-      - name: Build
-        run: dotnet build --no-restore
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: csharp
-
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-
-      - name: Fail if CodeQL found alerts
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const repo = process.env.GITHUB_REPOSITORY;
-            const [owner, repoName] = repo.split("/");
-            const result = await github.rest.codeScanning.listAlertsForRepo({
-              owner,
-              repo: repoName,
-              state: "open"
-            });
-            if (result.data.length > 0) {
-              core.setFailed(`CodeQL found ${result.data.length} security alert(s)!`);
-            } else {
-              console.log("No CodeQL alerts found.");
-            }
+      - name: Run DevSkim Scan on Solution
+        run: |
+          devskim analyze . --exit-code 1
