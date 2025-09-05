@@ -20,7 +20,7 @@ jobs:
           dotnet-version: '8.x'
 
       - name: Install DevSkim CLI
-        run: dotnet tool install --global Microsoft.DevSkim.CLI
+        run: dotnet tool install --global Microsoft.CST.DevSkim.CLI
 
       - name: Run DevSkim Scan on Solution
         run: |
