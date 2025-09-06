@@ -23,6 +23,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RepositoryTemplateTest.Lib"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RepositoryTemplateTest.Lib.Tests", "tests\TestProject1\RepositoryTemplateTest.Lib.Tests.csproj", "{E097E8D7-A6D0-761D-884C-B60500AA689E}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SecurityScanTest", "src\SecurityScanTest\SecurityScanTest.csproj", "{F551E819-D1C4-4B3E-90C1-FE9238C49331}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,6 +55,10 @@ Global
 		{E097E8D7-A6D0-761D-884C-B60500AA689E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E097E8D7-A6D0-761D-884C-B60500AA689E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E097E8D7-A6D0-761D-884C-B60500AA689E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F551E819-D1C4-4B3E-90C1-FE9238C49331}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F551E819-D1C4-4B3E-90C1-FE9238C49331}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F551E819-D1C4-4B3E-90C1-FE9238C49331}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F551E819-D1C4-4B3E-90C1-FE9238C49331}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
