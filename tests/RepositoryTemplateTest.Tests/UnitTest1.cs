@@ -1,4 +1,4 @@
-namespace RepositoryTemplateTest.Tests
+namespace RepositoryTemplateTest.App.Tests
 {
     public class UnitTest1
     {
@@ -13,7 +13,15 @@ namespace RepositoryTemplateTest.Tests
         [Fact]
         public void Test2()
         {
-            Program.Main([]);
+            ProgramApp.Main([]);
         }
+
+
+        [Fact]
+        public void Test3()
+        {
+            ProgramApp.Main([""]);
+        }
+
     }
 }
