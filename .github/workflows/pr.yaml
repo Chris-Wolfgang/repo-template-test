@@ -12,7 +12,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install DevSkim CLI
-        run: dotnet tool install --global Microsoft.DevSkim.CLI
+        run: dotnet tool install --global Microsoft.CST.DevSkim.CLI
 
       - name: Run DevSkim Security Scan (Save output)
         run: devskim analyze --source-code . --output-format text --output-file devskim-results.txt -E
@@ -21,7 +21,6 @@ jobs:
         if: failure()
         run: |
           echo "### DevSkim Security Issues Found"
-          echo ""
           cat devskim-results.txt
         shell: bash
 
